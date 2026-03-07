@@ -72,11 +72,9 @@ class LandmarkDensePredictor(BasePredictor):
         super().__init__(config)
         self._model = load_model(str(config.model_path))
         self._extractor = LandmarkExtractor(MediaPipeConfig(static_image_mode=False))
-        self._mp_draw = __import__("mediapipe").solutions.drawing_utils
-        self._mp_hands = __import__("mediapipe").solutions.hands
 
     def predict(self, frame_bgr: np.ndarray) -> tuple[int, float] | tuple[None, None]:
-        features, landmarks_raw = self._extract(frame_bgr)
+        features = self._extractor.extract_from_frame(frame_bgr)
         if features is None:
             return None, None
 
@@ -84,20 +82,6 @@ class LandmarkDensePredictor(BasePredictor):
         class_idx = int(np.argmax(probs))
         confidence = float(probs[class_idx])
         return class_idx, confidence
-
-    def draw_landmarks(self, frame_bgr: np.ndarray) -> np.ndarray:
-        image_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        result = self._extractor._hands.process(image_rgb)
-        if result.multi_hand_landmarks:
-            for hand_lm in result.multi_hand_landmarks:
-                self._mp_draw.draw_landmarks(
-                    frame_bgr, hand_lm, self._mp_hands.HAND_CONNECTIONS
-                )
-        return frame_bgr
-
-    def _extract(self, frame_bgr: np.ndarray):
-        features = self._extractor.extract_from_frame(frame_bgr)
-        return features, None
 
     def close(self) -> None:
         self._extractor.close()

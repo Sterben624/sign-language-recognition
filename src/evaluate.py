@@ -185,7 +185,7 @@ def _build_result(
     class_names: list[str],
     train_time_sec: float,
 ) -> EvaluationResult:
-    report = classification_report(y_true, y_pred, target_names=class_names, output_dict=True)
+    report = classification_report(y_true, y_pred, target_names=class_names, labels=list(range(len(class_names))), output_dict=True)
 
     mask = probs.max(axis=1) >= CONFIDENCE_THRESHOLD
     coverage = float(mask.mean())
