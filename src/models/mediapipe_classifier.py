@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
+from mediapipe.python.solutions import hands as _mp_hands
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -33,7 +34,7 @@ class MediaPipeConfig:
 class LandmarkExtractor:
     def __init__(self, config: MediaPipeConfig):
         self.config = config
-        self._hands = mp.solutions.hands.Hands(
+        self._hands = _mp_hands.Hands(
             static_image_mode=config.static_image_mode,
             max_num_hands=1,
             min_detection_confidence=config.min_detection_confidence,
