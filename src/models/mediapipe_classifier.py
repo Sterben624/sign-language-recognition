@@ -3,7 +3,8 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
-from mediapipe.python.solutions import hands as _mp_hands
+from mediapipe.tasks import python as _mp_tasks
+from mediapipe.tasks.python import vision as _mp_vision
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -31,28 +32,45 @@ class MediaPipeConfig:
     static_image_mode: bool = True
 
 
+_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "hand_landmarker.task"
+_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"
+
+
+def _ensure_model() -> Path:
+    if not _MODEL_PATH.exists():
+        import urllib.request
+        _MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Завантаження hand_landmarker.task...")
+        urllib.request.urlretrieve(_MODEL_URL, _MODEL_PATH)
+        print("Завантажено.")
+    return _MODEL_PATH
+
+
 class LandmarkExtractor:
     def __init__(self, config: MediaPipeConfig):
         self.config = config
-        self._hands = _mp_hands.Hands(
-            static_image_mode=config.static_image_mode,
-            max_num_hands=1,
-            min_detection_confidence=config.min_detection_confidence,
+        model_path = _ensure_model()
+        base_options = _mp_tasks.BaseOptions(model_asset_path=str(model_path))
+        options = _mp_vision.HandLandmarkerOptions(
+            base_options=base_options,
+            num_hands=1,
+            min_hand_detection_confidence=config.min_detection_confidence,
         )
+        self._landmarker = _mp_vision.HandLandmarker.create_from_options(options)
 
     def extract_from_image(self, image_bgr: np.ndarray) -> np.ndarray | None:
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        result = self._hands.process(image_rgb)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+        result = self._landmarker.detect(mp_image)
 
-        if not result.multi_hand_landmarks:
+        if not result.hand_landmarks:
             return None
 
-        landmarks = result.multi_hand_landmarks[0].landmark
+        landmarks = result.hand_landmarks[0]
         features = np.array([[lm.x, lm.y, lm.z] for lm in landmarks], dtype=np.float32)
         return self._normalize(features).flatten()
 
     def extract_from_frame(self, image_bgr: np.ndarray) -> np.ndarray | None:
-        # для відеопотоку — те саме, але можна розширити логіку
         return self.extract_from_image(image_bgr)
 
     def process_dataframe(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, pd.Index]:
@@ -76,7 +94,7 @@ class LandmarkExtractor:
         )
 
     def close(self) -> None:
-        self._hands.close()
+        self._landmarker.close()
 
     def __enter__(self):
         return self
@@ -86,7 +104,6 @@ class LandmarkExtractor:
 
     @staticmethod
     def _normalize(landmarks: np.ndarray) -> np.ndarray:
-        # нормалізація відносно зап'ястя (точка 0)
         wrist = landmarks[0]
         normalized = landmarks - wrist
         scale = np.max(np.abs(normalized)) + 1e-6
