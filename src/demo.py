@@ -171,7 +171,6 @@ class WebcamDemo:
                 else:
                     label = "—"
                     conf_text = ""
-                    self._last_emitted = None  # скидаємо — рука зникла
 
                 fps = fps_tracker.tick()
                 _render_overlay(frame, label, conf_text, fps, self._output)
@@ -186,6 +185,8 @@ class WebcamDemo:
             self._cleanup()
 
     def _emit(self, label: str) -> None:
+        if label in ("nothing", "???"):
+            return
         if label == self._last_emitted:
             return
         self._last_emitted = label
@@ -193,7 +194,7 @@ class WebcamDemo:
             self._output += " "
         elif label == "del":
             self._output = self._output[:-1]
-        elif label != "nothing":
+        else:
             self._output += label
         # обрізаємо щоб не виходило за межі рядка
         self._output = self._output[-self._MAX_OUTPUT_CHARS:]
